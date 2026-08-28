@@ -139,13 +139,74 @@
               <div class="music-now-playing">
                 <p class="music-label">Now playing</p>
                 <p class="music-track" id="musicNowPlaying">Nothing playing</p>
-                <p class="music-status" id="musicStatus" role="status" aria-live="polite">Ready</p>
+                <div class="music-progress">
+                  <label class="visually-hidden" for="musicProgressInput">Song progress</label>
+                  <input
+                    id="musicProgressInput"
+                    class="music-slider music-progress-input"
+                    type="range"
+                    min="0"
+                    max="0"
+                    step="0.1"
+                    value="0"
+                    disabled
+                  />
+                  <span class="music-time" id="musicTimeLabel">0:00 / 0:00</span>
+                </div>
               </div>
               <div class="music-controls">
-                <button class="secondary-button" type="button" id="musicAutoplayButton">Autoplay</button>
-                <button class="secondary-button" type="button" id="musicPlayPauseButton">Play</button>
-                <button class="secondary-button" type="button" id="musicSkipButton">Skip</button>
-                <button class="secondary-button" type="button" id="musicClearButton">Clear</button>
+                <label class="music-volume" for="musicVolumeInput">
+                  <span>Volume</span>
+                  <input
+                    id="musicVolumeInput"
+                    class="music-slider music-volume-input"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value="80"
+                  />
+                </label>
+                <p class="music-status" id="musicStatus" role="status" aria-live="polite">Ready</p>
+                <div class="music-control-buttons">
+                  <button class="secondary-button" type="button" id="musicAutoplayButton">Autoplay</button>
+                  <button
+                    class="secondary-button music-icon-button"
+                    type="button"
+                    id="musicRewindButton"
+                    aria-label="Restart or previous track"
+                    title="Restart or previous track"
+                  >
+                    ⏮
+                  </button>
+                  <button
+                    class="secondary-button music-icon-button"
+                    type="button"
+                    id="musicPlayPauseButton"
+                    aria-label="Play"
+                    title="Play"
+                  >
+                    ▶
+                  </button>
+                  <button
+                    class="secondary-button music-icon-button"
+                    type="button"
+                    id="musicSkipButton"
+                    aria-label="Skip track"
+                    title="Skip track"
+                  >
+                    ⏭
+                  </button>
+                  <button
+                    class="secondary-button music-icon-button music-clear-button"
+                    type="button"
+                    id="musicClearButton"
+                    aria-label="Clear music"
+                    title="Clear music"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
             </div>
 
