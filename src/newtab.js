@@ -23,6 +23,7 @@ const toggleQuickLinkDeleteButton = document.querySelector("#toggleQuickLinkDele
 const musicPanel = document.querySelector("#musicPanel");
 const toggleMusicPanelButton = document.querySelector("#toggleMusicPanelButton");
 const musicForm = document.querySelector("#musicForm");
+const musicSubmitButton = musicForm.querySelector('button[type="submit"]');
 const musicProviderInput = document.querySelector("#musicProviderInput");
 const musicProviderNote = document.querySelector("#musicProviderNote");
 const musicSearchInput = document.querySelector("#musicSearchInput");
@@ -277,7 +278,6 @@ function areAutoplayLibrariesEqual(firstLibrary, secondLibrary) {
 
 function setAutoplayStarting(isStarting) {
   isAutoplayStarting = isStarting;
-  musicAutoplayButton.disabled = isStarting;
   renderMusicState(musicState);
 }
 
@@ -424,15 +424,39 @@ function renderMusicProviders(providers) {
   renderMusicProviderNote();
 }
 
+function getSelectedMusicProvider() {
+  return (
+    musicProviders.find((provider) => provider.id === musicProviderInput.value) ??
+    FALLBACK_MUSIC_PROVIDERS.find((provider) => provider.id === musicProviderInput.value) ??
+    FALLBACK_MUSIC_PROVIDERS[0]
+  );
+}
+
+function isSelectedMusicProviderPlayable() {
+  return getSelectedMusicProvider()?.isPlayable !== false;
+}
+
+function renderMusicProviderControls() {
+  const isPlayable = isSelectedMusicProviderPlayable();
+  musicSubmitButton.textContent = isPlayable ? "Add track" : "Open track";
+  musicSearchInput.placeholder = isPlayable ? "Song Name - Artist" : "Song or artist";
+  musicAutoplayButton.disabled = isAutoplayStarting || (!isPlayable && !musicState.autoplay.enabled);
+  musicAutoplayButton.title = isPlayable
+    ? ""
+    : "Spotify can search and open tracks, but in-extension playback uses iTunes previews.";
+}
+
 function renderMusicProviderNote() {
   if (musicProviderInput.value === "spotify") {
     musicProviderNote.textContent = spotifyAuthState.isConnected
-      ? "Spotify search is connected. Direct in-extension Spotify streaming is not enabled yet."
+      ? "Spotify search is connected. Tracks open in Spotify; in-extension playback uses iTunes previews."
       : "Spotify needs a Client ID and sign-in from settings. iTunes previews work without sign-in.";
+    renderMusicProviderControls();
     return;
   }
 
   musicProviderNote.textContent = "Using public iTunes preview streams.";
+  renderMusicProviderControls();
 }
 
 function renderSpotifyAuthStatus(authStatus = spotifyAuthState) {
@@ -486,6 +510,7 @@ function renderMusicState(state) {
     !musicState.currentTrack && musicState.queue.length === 0 && !musicState.autoplay.enabled;
   musicClearButton.disabled =
     !musicState.currentTrack && musicState.queue.length === 0 && !musicState.autoplay.enabled;
+  renderMusicProviderControls();
   musicQueueList.replaceChildren();
 
   if (musicState.queue.length === 0) {
@@ -695,11 +720,37 @@ async function addMusicTrack(event) {
   musicStatus.textContent = "Searching...";
 
   try {
+    if (!isSelectedMusicProviderPlayable()) {
+      const response = await sendBackgroundMusicMessage("MUSIC_OPEN_QUERY", {
+        query,
+        providerId: musicProviderInput.value
+      });
+
+      if (!response?.ok) {
+        if (response?.state) {
+          renderMusicState(response.state);
+        }
+
+        throw new Error(response?.error ?? "Music action failed.");
+      }
+
+      if (response.state) {
+        renderMusicState(response.state);
+      }
+
+      musicStatus.textContent = response.track
+        ? `Opened ${getTrackLabel(response.track)}`
+        : "Opened track";
+      musicSearchInput.value = "";
+      musicSearchInput.focus();
+      return;
+    }
+
     await sendMusicMessage("MUSIC_ADD_QUERY", {
       query,
       providerId: musicProviderInput.value
     });
-    musicForm.reset();
+    musicSearchInput.value = "";
     musicSearchInput.focus();
   } catch (error) {
     console.error(error);
@@ -834,6 +885,11 @@ musicAutoplayButton.addEventListener("click", async () => {
   try {
     if (musicState.autoplay.enabled) {
       await sendMusicMessage("MUSIC_AUTOPLAY_STOP");
+      return;
+    }
+
+    if (!isSelectedMusicProviderPlayable()) {
+      musicStatus.textContent = "Autoplay uses iTunes previews in this version.";
       return;
     }
 

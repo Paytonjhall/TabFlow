@@ -234,6 +234,28 @@ async function queueSearch({ query, providerId }) {
   return getPublicState();
 }
 
+async function openProviderSearch({ query, providerId }) {
+  const track = await fetchAudioSource(query, providerId);
+
+  if (!track.externalUrl) {
+    throw new Error(`${track.source} did not return an external link.`);
+  }
+
+  await chrome.tabs.create({ url: track.externalUrl });
+  playbackState.error = "";
+
+  if (!playbackState.currentTrack && playbackState.status === "error") {
+    playbackState.status = "idle";
+  }
+
+  broadcastState();
+
+  return {
+    state: getPublicState(),
+    track
+  };
+}
+
 async function pausePlayback() {
   if (!playbackState.currentTrack) {
     return getPublicState();
@@ -304,6 +326,11 @@ async function handleMusicMessage(message) {
   switch (message.type) {
     case "MUSIC_ADD_QUERY":
       return queueSearch({
+        query: message.query ?? "",
+        providerId: message.providerId
+      });
+    case "MUSIC_OPEN_QUERY":
+      return openProviderSearch({
         query: message.query ?? "",
         providerId: message.providerId
       });
