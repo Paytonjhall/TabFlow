@@ -23,13 +23,18 @@ const toggleQuickLinkDeleteButton = document.querySelector("#toggleQuickLinkDele
 const musicPanel = document.querySelector("#musicPanel");
 const toggleMusicPanelButton = document.querySelector("#toggleMusicPanelButton");
 const musicForm = document.querySelector("#musicForm");
+const musicSubmitButton = musicForm.querySelector('button[type="submit"]');
 const musicProviderInput = document.querySelector("#musicProviderInput");
 const musicProviderNote = document.querySelector("#musicProviderNote");
 const musicSearchInput = document.querySelector("#musicSearchInput");
 const musicNowPlaying = document.querySelector("#musicNowPlaying");
 const musicStatus = document.querySelector("#musicStatus");
+const musicProgressInput = document.querySelector("#musicProgressInput");
+const musicTimeLabel = document.querySelector("#musicTimeLabel");
+const musicVolumeInput = document.querySelector("#musicVolumeInput");
 const musicQueueList = document.querySelector("#musicQueueList");
 const musicAutoplayButton = document.querySelector("#musicAutoplayButton");
+const musicRewindButton = document.querySelector("#musicRewindButton");
 const musicPlayPauseButton = document.querySelector("#musicPlayPauseButton");
 const musicSkipButton = document.querySelector("#musicSkipButton");
 const musicClearButton = document.querySelector("#musicClearButton");
@@ -59,7 +64,7 @@ const FALLBACK_MUSIC_PROVIDERS = Object.freeze([
   {
     id: "spotify",
     label: "Spotify",
-    isPlayable: false,
+    isPlayable: true,
     requiresAuth: true
   }
 ]);
@@ -79,9 +84,13 @@ let settings = {
 };
 let musicState = {
   queue: [],
+  history: [],
   currentTrack: null,
   status: "idle",
   error: "",
+  volume: 0.8,
+  position: 0,
+  duration: 0,
   autoplay: {
     enabled: false,
     providerId: "itunesPreview",
@@ -98,6 +107,9 @@ let spotifyAuthState = {
   redirectUrl: ""
 };
 let isAutoplayStarting = false;
+let isSeekingPlayback = false;
+let isAdjustingVolume = false;
+let volumeRequestId = 0;
 
 function setStatus(message) {
   saveStatus.textContent = message;
@@ -267,6 +279,38 @@ function parseAutoplayLibrary(value) {
     .filter(Boolean);
 }
 
+function normalizePlaybackTime(time) {
+  const numericTime = Number(time);
+
+  if (!Number.isFinite(numericTime) || numericTime < 0) {
+    return 0;
+  }
+
+  return numericTime;
+}
+
+function formatPlaybackTime(time) {
+  const normalizedTime = Math.floor(normalizePlaybackTime(time));
+  const minutes = Math.floor(normalizedTime / 60);
+  const seconds = String(normalizedTime % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
+
+function renderPlaybackProgress(position, duration) {
+  const normalizedPosition = normalizePlaybackTime(position);
+  const normalizedDuration = normalizePlaybackTime(duration);
+  const sliderMax = normalizedDuration > 0 ? normalizedDuration : 0;
+
+  musicProgressInput.max = String(sliderMax);
+  musicProgressInput.disabled = !musicState.currentTrack || sliderMax === 0;
+
+  if (!isSeekingPlayback) {
+    musicProgressInput.value = String(Math.min(normalizedPosition, sliderMax));
+  }
+
+  musicTimeLabel.textContent = `${formatPlaybackTime(normalizedPosition)} / ${formatPlaybackTime(normalizedDuration)}`;
+}
+
 function areAutoplayLibrariesEqual(firstLibrary, secondLibrary) {
   if (firstLibrary.length !== secondLibrary.length) {
     return false;
@@ -277,7 +321,6 @@ function areAutoplayLibrariesEqual(firstLibrary, secondLibrary) {
 
 function setAutoplayStarting(isStarting) {
   isAutoplayStarting = isStarting;
-  musicAutoplayButton.disabled = isStarting;
   renderMusicState(musicState);
 }
 
@@ -424,15 +467,39 @@ function renderMusicProviders(providers) {
   renderMusicProviderNote();
 }
 
+function getSelectedMusicProvider() {
+  return (
+    musicProviders.find((provider) => provider.id === musicProviderInput.value) ??
+    FALLBACK_MUSIC_PROVIDERS.find((provider) => provider.id === musicProviderInput.value) ??
+    FALLBACK_MUSIC_PROVIDERS[0]
+  );
+}
+
+function isSelectedMusicProviderPlayable() {
+  return getSelectedMusicProvider()?.isPlayable !== false;
+}
+
+function renderMusicProviderControls() {
+  const isPlayable = isSelectedMusicProviderPlayable();
+  musicSubmitButton.textContent = "Add track";
+  musicSearchInput.placeholder = "Song Name - Artist";
+  musicAutoplayButton.disabled = isAutoplayStarting || (!isPlayable && !musicState.autoplay.enabled);
+  musicAutoplayButton.title = isPlayable
+    ? ""
+    : "In-extension playback uses iTunes previews.";
+}
+
 function renderMusicProviderNote() {
   if (musicProviderInput.value === "spotify") {
     musicProviderNote.textContent = spotifyAuthState.isConnected
-      ? "Spotify search is connected. Direct in-extension Spotify streaming is not enabled yet."
+      ? "Spotify search is connected. TabFlow plays matched iTunes previews in the queue."
       : "Spotify needs a Client ID and sign-in from settings. iTunes previews work without sign-in.";
+    renderMusicProviderControls();
     return;
   }
 
   musicProviderNote.textContent = "Using public iTunes preview streams.";
+  renderMusicProviderControls();
 }
 
 function renderSpotifyAuthStatus(authStatus = spotifyAuthState) {
@@ -479,13 +546,24 @@ function renderMusicState(state) {
   musicAutoplayButton.classList.toggle("is-active", isAutoplayEngaged);
   musicAutoplayButton.setAttribute("aria-pressed", String(isAutoplayEngaged));
   musicPanel.classList.toggle("is-autoplaying", isAutoplayEngaged);
-  musicPlayPauseButton.textContent = musicState.status === "playing" ? "Pause" : "Play";
+  renderPlaybackProgress(musicState.position, musicState.duration);
+
+  if (!isAdjustingVolume) {
+    musicVolumeInput.value = String(Math.round((musicState.volume ?? 0.8) * 100));
+  }
+
+  const isPlaying = musicState.status === "playing";
+  musicPlayPauseButton.textContent = isPlaying ? "⏸" : "▶";
+  musicPlayPauseButton.title = isPlaying ? "Pause" : "Play";
+  musicPlayPauseButton.setAttribute("aria-label", musicPlayPauseButton.title);
+  musicRewindButton.disabled = !musicState.currentTrack;
   musicPlayPauseButton.disabled =
     !musicState.currentTrack && musicState.queue.length === 0 && !musicState.autoplay.enabled;
   musicSkipButton.disabled =
     !musicState.currentTrack && musicState.queue.length === 0 && !musicState.autoplay.enabled;
   musicClearButton.disabled =
     !musicState.currentTrack && musicState.queue.length === 0 && !musicState.autoplay.enabled;
+  renderMusicProviderControls();
   musicQueueList.replaceChildren();
 
   if (musicState.queue.length === 0) {
@@ -500,7 +578,18 @@ function renderMusicState(state) {
 
   for (const track of musicState.queue) {
     const item = document.createElement("li");
-    item.textContent = getTrackLabel(track);
+    const trackLabel = document.createElement("span");
+    trackLabel.textContent = getTrackLabel(track);
+
+    const removeButton = document.createElement("button");
+    removeButton.className = "music-queue-remove";
+    removeButton.type = "button";
+    removeButton.textContent = "×";
+    removeButton.title = `Remove ${getTrackLabel(track)} from queue`;
+    removeButton.setAttribute("aria-label", removeButton.title);
+    removeButton.dataset.trackId = track.id;
+
+    item.append(trackLabel, removeButton);
     musicQueueList.append(item);
   }
 }
@@ -699,7 +788,7 @@ async function addMusicTrack(event) {
       query,
       providerId: musicProviderInput.value
     });
-    musicForm.reset();
+    musicSearchInput.value = "";
     musicSearchInput.focus();
   } catch (error) {
     console.error(error);
@@ -800,6 +889,85 @@ async function handleQuickLinkAction(event) {
   await persistQuickLinks("Link deleted");
 }
 
+async function handleMusicQueueAction(event) {
+  const removeButton = event.target.closest(".music-queue-remove");
+
+  if (!removeButton) {
+    return;
+  }
+
+  try {
+    await sendMusicMessage("MUSIC_REMOVE_QUEUE_TRACK", {
+      trackId: removeButton.dataset.trackId
+    });
+  } catch (error) {
+    console.error(error);
+    musicStatus.textContent = error.message;
+  }
+}
+
+function handlePlaybackProgressInput() {
+  isSeekingPlayback = true;
+  renderPlaybackProgress(musicProgressInput.value, musicState.duration);
+}
+
+async function handlePlaybackProgressChange() {
+  try {
+    await sendMusicMessage("MUSIC_SEEK", {
+      position: musicProgressInput.value
+    });
+  } catch (error) {
+    console.error(error);
+    musicStatus.textContent = error.message;
+  } finally {
+    isSeekingPlayback = false;
+    renderPlaybackProgress(musicState.position, musicState.duration);
+  }
+}
+
+function handleVolumeInput() {
+  const volume = Number(musicVolumeInput.value) / 100;
+  const requestId = volumeRequestId + 1;
+  volumeRequestId = requestId;
+  isAdjustingVolume = true;
+  musicState = {
+    ...musicState,
+    volume
+  };
+
+  sendBackgroundMusicMessage("MUSIC_SET_VOLUME", { volume })
+    .then((response) => {
+      if (requestId !== volumeRequestId) {
+        return;
+      }
+
+      if (!response?.ok) {
+        if (response?.state) {
+          renderMusicState(response.state);
+        }
+
+        throw new Error(response?.error ?? "Music action failed.");
+      }
+
+      if (response.state) {
+        renderMusicState(response.state);
+      }
+    })
+    .catch((error) => {
+      if (requestId !== volumeRequestId) {
+        return;
+      }
+
+      console.error(error);
+      musicStatus.textContent = error.message;
+    })
+    .finally(() => {
+      if (requestId === volumeRequestId) {
+        isAdjustingVolume = false;
+      }
+    });
+}
+
 noteForm.addEventListener("submit", createNote);
 noteList.addEventListener("click", handleNoteAction);
 quickLinkForm.addEventListener("submit", createQuickLink);
@@ -830,6 +998,11 @@ musicProviderInput.addEventListener("change", async () => {
   }
 });
 musicForm.addEventListener("submit", addMusicTrack);
+musicQueueList.addEventListener("click", handleMusicQueueAction);
+musicProgressInput.addEventListener("input", handlePlaybackProgressInput);
+musicProgressInput.addEventListener("change", handlePlaybackProgressChange);
+musicVolumeInput.addEventListener("input", handleVolumeInput);
+musicVolumeInput.addEventListener("change", handleVolumeInput);
 musicAutoplayButton.addEventListener("click", async () => {
   try {
     if (musicState.autoplay.enabled) {
@@ -869,6 +1042,14 @@ musicAutoplayButton.addEventListener("click", async () => {
     if (isAutoplayStarting) {
       setAutoplayStarting(false);
     }
+  }
+});
+musicRewindButton.addEventListener("click", async () => {
+  try {
+    await sendMusicMessage("MUSIC_REWIND");
+  } catch (error) {
+    console.error(error);
+    musicStatus.textContent = error.message;
   }
 });
 musicPlayPauseButton.addEventListener("click", async () => {

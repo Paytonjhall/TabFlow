@@ -9,12 +9,18 @@ import {
 
 const OFFSCREEN_DOCUMENT_PATH = "src/offscreen/offscreen.html";
 const PLAYBACK_STATE_KEY = "music.playbackState";
+const PLAYBACK_HISTORY_LIMIT = 20;
+const RESTART_TRACK_THRESHOLD_SECONDS = 4;
 
 const playbackState = {
   queue: [],
+  history: [],
   currentTrack: null,
   status: "idle",
   error: "",
+  volume: 0.8,
+  position: 0,
+  duration: 0,
   autoplay: {
     enabled: false,
     providerId: "itunesPreview",
@@ -33,9 +39,13 @@ function wait(milliseconds) {
 function normalizePlaybackState(state) {
   return {
     queue: Array.isArray(state?.queue) ? state.queue : [],
+    history: Array.isArray(state?.history) ? state.history.slice(-PLAYBACK_HISTORY_LIMIT) : [],
     currentTrack: state?.currentTrack ?? null,
     status: state?.status ?? "idle",
     error: state?.error ?? "",
+    volume: normalizeVolume(state?.volume),
+    position: normalizePlaybackTime(state?.position),
+    duration: normalizePlaybackTime(state?.duration),
     autoplay: {
       enabled: Boolean(state?.autoplay?.enabled),
       providerId: state?.autoplay?.providerId ?? "itunesPreview",
@@ -48,11 +58,44 @@ function normalizePlaybackState(state) {
 function getPublicState() {
   return {
     queue: playbackState.queue,
+    history: playbackState.history,
     currentTrack: playbackState.currentTrack,
     status: playbackState.status,
     error: playbackState.error,
+    volume: playbackState.volume,
+    position: playbackState.position,
+    duration: playbackState.duration,
     autoplay: playbackState.autoplay
   };
+}
+
+function normalizeVolume(volume) {
+  const numericVolume = Number(volume);
+
+  if (!Number.isFinite(numericVolume)) {
+    return 0.8;
+  }
+
+  return Math.min(1, Math.max(0, numericVolume));
+}
+
+function normalizePlaybackTime(time) {
+  const numericTime = Number(time);
+
+  if (!Number.isFinite(numericTime) || numericTime < 0) {
+    return 0;
+  }
+
+  return numericTime;
+}
+
+function applyPlaybackProgress(progress = {}) {
+  playbackState.position = normalizePlaybackTime(progress.position);
+  playbackState.duration = normalizePlaybackTime(progress.duration);
+}
+
+function isCurrentTrackMessage(message) {
+  return !message.trackId || message.trackId === playbackState.currentTrack?.id;
 }
 
 function normalizeAutoplayLibrary(library) {
@@ -70,6 +113,14 @@ function shuffleItems(items) {
   }
 
   return shuffledItems;
+}
+
+function addTrackToHistory(track) {
+  if (!track) {
+    return;
+  }
+
+  playbackState.history = [...playbackState.history, track].slice(-PLAYBACK_HISTORY_LIMIT);
 }
 
 async function hydratePlaybackState() {
@@ -130,10 +181,12 @@ async function sendToAudioPlayer(message) {
   throw lastError ?? new Error("Audio player unavailable.");
 }
 
-function broadcastState() {
-  persistPlaybackState().catch((error) => {
-    console.error(error);
-  });
+function broadcastState({ shouldPersist = true } = {}) {
+  if (shouldPersist) {
+    persistPlaybackState().catch((error) => {
+      console.error(error);
+    });
+  }
 
   chrome.runtime
     .sendMessage({
@@ -146,6 +199,7 @@ function broadcastState() {
 
 async function playNextTrack() {
   let nextTrack = playbackState.queue.shift() ?? null;
+  const previousTrack = playbackState.currentTrack;
   playbackState.error = "";
 
   if (!nextTrack && playbackState.autoplay.enabled) {
@@ -164,15 +218,20 @@ async function playNextTrack() {
     }
   }
 
-  playbackState.currentTrack = nextTrack;
-
   if (!nextTrack) {
+    playbackState.currentTrack = null;
     playbackState.status = "idle";
+    playbackState.position = 0;
+    playbackState.duration = 0;
     broadcastState();
     return getPublicState();
   }
 
+  addTrackToHistory(previousTrack);
+  playbackState.currentTrack = nextTrack;
   playbackState.status = "loading";
+  playbackState.position = 0;
+  playbackState.duration = 0;
   broadcastState();
 
   try {
@@ -180,7 +239,12 @@ async function playNextTrack() {
       throw new Error(`${nextTrack.source} playback is not wired to a direct audio stream yet.`);
     }
 
-    await sendToAudioPlayer({ type: "PLAY_TRACK", track: nextTrack });
+    const response = await sendToAudioPlayer({
+      type: "PLAY_TRACK",
+      track: nextTrack,
+      volume: playbackState.volume
+    });
+    applyPlaybackProgress(response.progress);
     playbackState.status = "playing";
   } catch (error) {
     console.error(error);
@@ -234,12 +298,66 @@ async function queueSearch({ query, providerId }) {
   return getPublicState();
 }
 
+function removeQueuedTrack(trackId) {
+  playbackState.queue = playbackState.queue.filter((track) => track.id !== trackId);
+  playbackState.error = "";
+  broadcastState();
+  return getPublicState();
+}
+
+async function restartOrPlayPreviousTrack() {
+  if (!playbackState.currentTrack) {
+    return getPublicState();
+  }
+
+  if (
+    playbackState.position > RESTART_TRACK_THRESHOLD_SECONDS ||
+    playbackState.history.length === 0
+  ) {
+    const response = await sendToAudioPlayer({
+      type: "SEEK_TRACK",
+      position: 0
+    });
+    applyPlaybackProgress(response.progress);
+    playbackState.error = "";
+    broadcastState();
+    return getPublicState();
+  }
+
+  const previousTrack = playbackState.history.pop();
+  playbackState.queue.unshift(playbackState.currentTrack);
+  playbackState.currentTrack = previousTrack;
+  playbackState.status = "loading";
+  playbackState.error = "";
+  playbackState.position = 0;
+  playbackState.duration = 0;
+  broadcastState();
+
+  try {
+    const response = await sendToAudioPlayer({
+      type: "PLAY_TRACK",
+      track: previousTrack,
+      volume: playbackState.volume
+    });
+    applyPlaybackProgress(response.progress);
+    playbackState.status = "playing";
+  } catch (error) {
+    console.error(error);
+    playbackState.status = "error";
+    playbackState.error = error.message;
+  }
+
+  broadcastState();
+  return getPublicState();
+}
+
 async function pausePlayback() {
   if (!playbackState.currentTrack) {
     return getPublicState();
   }
 
-  await sendToAudioPlayer({ type: "PAUSE_TRACK" });
+  const response = await sendToAudioPlayer({ type: "PAUSE_TRACK" });
+  applyPlaybackProgress(response.progress);
   playbackState.status = "paused";
   broadcastState();
   return getPublicState();
@@ -250,7 +368,8 @@ async function resumePlayback() {
     return playNextTrack();
   }
 
-  await sendToAudioPlayer({ type: "RESUME_TRACK" });
+  const response = await sendToAudioPlayer({ type: "RESUME_TRACK" });
+  applyPlaybackProgress(response.progress);
   playbackState.status = "playing";
   broadcastState();
   return getPublicState();
@@ -258,12 +377,45 @@ async function resumePlayback() {
 
 async function clearQueue() {
   playbackState.queue = [];
+  playbackState.history = [];
   playbackState.currentTrack = null;
   playbackState.status = "idle";
   playbackState.error = "";
+  playbackState.position = 0;
+  playbackState.duration = 0;
   playbackState.autoplay.enabled = false;
   playbackState.autoplay.upcoming = [];
   await sendToAudioPlayer({ type: "STOP_TRACK" });
+  broadcastState();
+  return getPublicState();
+}
+
+async function setPlaybackVolume(volume) {
+  playbackState.volume = normalizeVolume(volume);
+
+  if (playbackState.currentTrack) {
+    await sendToAudioPlayer({
+      type: "SET_VOLUME",
+      volume: playbackState.volume
+    });
+  }
+
+  broadcastState();
+  return getPublicState();
+}
+
+async function seekPlayback(position) {
+  if (!playbackState.currentTrack) {
+    playbackState.position = 0;
+    broadcastState();
+    return getPublicState();
+  }
+
+  const response = await sendToAudioPlayer({
+    type: "SEEK_TRACK",
+    position: normalizePlaybackTime(position)
+  });
+  applyPlaybackProgress(response.progress);
   broadcastState();
   return getPublicState();
 }
@@ -307,6 +459,14 @@ async function handleMusicMessage(message) {
         query: message.query ?? "",
         providerId: message.providerId
       });
+    case "MUSIC_REMOVE_QUEUE_TRACK":
+      return removeQueuedTrack(message.trackId);
+    case "MUSIC_SET_VOLUME":
+      return setPlaybackVolume(message.volume);
+    case "MUSIC_SEEK":
+      return seekPlayback(message.position);
+    case "MUSIC_REWIND":
+      return restartOrPlayPreviousTrack();
     case "MUSIC_AUTOPLAY_START":
       return startAutoplay({
         library: message.library,
@@ -350,11 +510,31 @@ async function handleMusicMessage(message) {
     case "MUSIC_CLEAR":
       return clearQueue();
     case "MUSIC_TRACK_ENDED":
+      if (!isCurrentTrackMessage(message)) {
+        return getPublicState();
+      }
+
       return playNextTrack();
     case "MUSIC_TRACK_ERROR":
+      if (!playbackState.currentTrack) {
+        return getPublicState();
+      }
+
+      if (!isCurrentTrackMessage(message)) {
+        return getPublicState();
+      }
+
       playbackState.status = "error";
       playbackState.error = message.error ?? "Could not play this track.";
       broadcastState();
+      return getPublicState();
+    case "MUSIC_TRACK_PROGRESS":
+      if (!isCurrentTrackMessage(message)) {
+        return getPublicState();
+      }
+
+      applyPlaybackProgress(message.progress);
+      broadcastState({ shouldPersist: false });
       return getPublicState();
     default:
       return getPublicState();
