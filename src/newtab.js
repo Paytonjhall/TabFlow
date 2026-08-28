@@ -64,7 +64,7 @@ const FALLBACK_MUSIC_PROVIDERS = Object.freeze([
   {
     id: "spotify",
     label: "Spotify",
-    isPlayable: false,
+    isPlayable: true,
     requiresAuth: true
   }
 ]);
@@ -481,18 +481,18 @@ function isSelectedMusicProviderPlayable() {
 
 function renderMusicProviderControls() {
   const isPlayable = isSelectedMusicProviderPlayable();
-  musicSubmitButton.textContent = isPlayable ? "Add track" : "Open track";
-  musicSearchInput.placeholder = isPlayable ? "Song Name - Artist" : "Song or artist";
+  musicSubmitButton.textContent = "Add track";
+  musicSearchInput.placeholder = "Song Name - Artist";
   musicAutoplayButton.disabled = isAutoplayStarting || (!isPlayable && !musicState.autoplay.enabled);
   musicAutoplayButton.title = isPlayable
     ? ""
-    : "Spotify can search and open tracks, but in-extension playback uses iTunes previews.";
+    : "In-extension playback uses iTunes previews.";
 }
 
 function renderMusicProviderNote() {
   if (musicProviderInput.value === "spotify") {
     musicProviderNote.textContent = spotifyAuthState.isConnected
-      ? "Spotify search is connected. Tracks open in Spotify; in-extension playback uses iTunes previews."
+      ? "Spotify search is connected. TabFlow plays matched iTunes previews in the queue."
       : "Spotify needs a Client ID and sign-in from settings. iTunes previews work without sign-in.";
     renderMusicProviderControls();
     return;
@@ -784,32 +784,6 @@ async function addMusicTrack(event) {
   musicStatus.textContent = "Searching...";
 
   try {
-    if (!isSelectedMusicProviderPlayable()) {
-      const response = await sendBackgroundMusicMessage("MUSIC_OPEN_QUERY", {
-        query,
-        providerId: musicProviderInput.value
-      });
-
-      if (!response?.ok) {
-        if (response?.state) {
-          renderMusicState(response.state);
-        }
-
-        throw new Error(response?.error ?? "Music action failed.");
-      }
-
-      if (response.state) {
-        renderMusicState(response.state);
-      }
-
-      musicStatus.textContent = response.track
-        ? `Opened ${getTrackLabel(response.track)}`
-        : "Opened track";
-      musicSearchInput.value = "";
-      musicSearchInput.focus();
-      return;
-    }
-
     await sendMusicMessage("MUSIC_ADD_QUERY", {
       query,
       providerId: musicProviderInput.value
@@ -1033,11 +1007,6 @@ musicAutoplayButton.addEventListener("click", async () => {
   try {
     if (musicState.autoplay.enabled) {
       await sendMusicMessage("MUSIC_AUTOPLAY_STOP");
-      return;
-    }
-
-    if (!isSelectedMusicProviderPlayable()) {
-      musicStatus.textContent = "Autoplay uses iTunes previews in this version.";
       return;
     }
 

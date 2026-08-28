@@ -30,6 +30,6 @@ Autoplay uses the saved songs/artists list in settings. When enabled, the backgr
 Music providers live under `src/features/music/providers/` and are routed by `src/features/music/musicProviders.js`.
 
 - `itunesPreview` is the current playable provider and uses direct public preview audio URLs.
-- `spotify` is scaffolded with OAuth + PKCE through `chrome.identity.launchWebAuthFlow`. It stores tokens in `chrome.storage.local`, never asks for a password, and does not require a client secret in the extension. In this version Spotify is a search/open provider: tracks open in Spotify instead of playing through TabFlow.
+- `spotify` is scaffolded with OAuth + PKCE through `chrome.identity.launchWebAuthFlow`. It stores tokens in `chrome.storage.local`, never asks for a password, and does not require a client secret in the extension. In this version Spotify is used for track search, then TabFlow resolves a matching iTunes preview URL for in-extension playback.
 
 To try Spotify auth later, create a Spotify app, add the extension redirect URL shown in the settings flow to that app, then paste the app's public Client ID into TabFlow settings.

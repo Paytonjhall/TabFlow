@@ -5,6 +5,7 @@ import {
   saveSpotifyClientId,
   saveSpotifyToken
 } from "./spotifyAuthStorage.js";
+import { itunesPreviewProvider } from "./itunesPreviewProvider.js";
 
 export const SPOTIFY_PROVIDER_ID = "spotify";
 
@@ -231,24 +232,28 @@ async function fetchAudioSource(query) {
     throw new Error("No Spotify track found.");
   }
 
+  const artist = track.artists.map((spotifyArtist) => spotifyArtist.name).join(", ");
+  const previewTrack = await itunesPreviewProvider.fetchAudioSource(`${track.name} - ${artist}`);
+
   return {
     id: `${SPOTIFY_PROVIDER_ID}-${track.id}-${Date.now()}`,
     providerId: SPOTIFY_PROVIDER_ID,
-    playbackType: "provider-control",
+    playbackType: "direct-audio",
     query: normalizedQuery,
     title: track.name,
-    artist: track.artists.map((artist) => artist.name).join(", "),
+    artist,
     album: track.album?.name ?? "",
     providerTrackId: track.uri,
     externalUrl: track.external_urls?.spotify,
-    source: "Spotify"
+    sourceUrl: previewTrack.sourceUrl,
+    source: "Spotify search / iTunes preview"
   };
 }
 
 export const spotifyProvider = {
   id: SPOTIFY_PROVIDER_ID,
   label: "Spotify",
-  isPlayable: false,
+  isPlayable: true,
   requiresAuth: true,
   configure,
   connect,
