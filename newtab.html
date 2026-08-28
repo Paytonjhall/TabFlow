@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TabFlow</title>
+    <link rel="stylesheet" href="./src/styles/newtab.css" />
+  </head>
+  <body>
+    <button class="theme-mode-button" type="button" id="themeModeButton" aria-label="Turn on dark mode">
+      ◐
+    </button>
+    <button class="settings-button" type="button" id="settingsButton" aria-label="Open settings">
+      ⚙
+    </button>
+
+    <main class="page-shell">
+      <section class="focus-area" aria-label="TabFlow overview">
+        <p class="eyebrow">
+          <span>TabFlow</span>
+          <time id="currentTime" aria-label="Current time">--:--</time>
+        </p>
+        <h1 id="greetingHeading">Good day.</h1>
+
+        <form class="search-form" id="searchForm" action="https://www.google.com/search" method="GET">
+          <label class="visually-hidden" for="searchInput">Search Google</label>
+          <input
+            id="searchInput"
+            class="search-input"
+            type="search"
+            name="q"
+            placeholder="Search Google"
+            autocomplete="off"
+          />
+          <button class="search-button" type="submit" aria-label="Search Google">Search</button>
+        </form>
+
+        <section class="quick-links" aria-label="Quick links">
+          <div class="quick-links-header">
+            <h2>Quick links</h2>
+            <div class="quick-link-header-actions">
+              <button class="secondary-button" type="button" id="toggleQuickLinkFormButton">
+                Add new link
+              </button>
+              <button class="secondary-button" type="button" id="toggleQuickLinkDeleteButton">
+                Remove link
+              </button>
+            </div>
+          </div>
+
+          <form class="quick-link-form is-hidden" id="quickLinkForm">
+            <div class="quick-link-field">
+              <label class="quick-link-label" for="quickLinkIconInput">Icon</label>
+              <select id="quickLinkIconInput" class="quick-link-input icon-select">
+                <option value="⌂">⌂ Home</option>
+                <option value="◆">◆ Work</option>
+                <option value="⌘">⌘ Code</option>
+                <option value="▶">▶ Video</option>
+                <option value="$">$ Shopping</option>
+                <option value="@">@ Social</option>
+                <option value="#"># Docs</option>
+                <option value="♪">♪ Music</option>
+                <option value="✉">✉ Mail</option>
+                <option value="☁">☁ Cloud</option>
+                <option value="★">★ Favorite</option>
+                <option value="✓">✓ Tasks</option>
+                <option value="⌕">⌕ Research</option>
+                <option value="⚑">⚑ Planning</option>
+                <option value="▣">▣ Dashboard</option>
+                <option value="∞">∞ Learning</option>
+              </select>
+            </div>
+
+            <div class="quick-link-field">
+              <label class="quick-link-label" for="quickLinkNameInput">Name</label>
+              <input
+                id="quickLinkNameInput"
+                class="quick-link-input"
+                maxlength="34"
+                placeholder="OpenAI"
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="quick-link-field">
+              <label class="quick-link-label" for="quickLinkUrlInput">Link</label>
+              <input
+                id="quickLinkUrlInput"
+                class="quick-link-input"
+                type="text"
+                inputmode="url"
+                placeholder="https://example.com"
+                autocomplete="off"
+                required
+              />
+            </div>
+
+            <button class="primary-button" type="submit">Save link</button>
+          </form>
+
+          <ul class="quick-link-list" id="quickLinkList" aria-label="Saved quick links"></ul>
+        </section>
+
+        <section class="music-panel" id="musicPanel" aria-label="Music queue">
+          <div class="music-header">
+            <h2>Music queue</h2>
+            <button
+              class="icon-button music-toggle"
+              type="button"
+              id="toggleMusicPanelButton"
+              aria-label="Collapse music queue"
+              aria-expanded="true"
+            >
+              ↑
+            </button>
+          </div>
+
+          <div class="music-body">
+            <form class="music-form" id="musicForm">
+              <label class="visually-hidden" for="musicProviderInput">Music provider</label>
+              <select id="musicProviderInput" class="music-input music-provider-input">
+                <option value="itunesPreview">iTunes previews</option>
+              </select>
+              <label class="visually-hidden" for="musicSearchInput">Song and artist</label>
+              <input
+                id="musicSearchInput"
+                class="music-input"
+                type="text"
+                placeholder="Song Name - Artist"
+                autocomplete="off"
+                required
+              />
+              <button class="primary-button" type="submit">Add track</button>
+            </form>
+
+            <p class="music-provider-note" id="musicProviderNote"></p>
+
+            <div class="music-player">
+              <div class="music-now-playing">
+                <p class="music-label">Now playing</p>
+                <p class="music-track" id="musicNowPlaying">Nothing playing</p>
+                <p class="music-status" id="musicStatus" role="status" aria-live="polite">Ready</p>
+              </div>
+              <div class="music-controls">
+                <button class="secondary-button" type="button" id="musicAutoplayButton">Autoplay</button>
+                <button class="secondary-button" type="button" id="musicPlayPauseButton">Play</button>
+                <button class="secondary-button" type="button" id="musicSkipButton">Skip</button>
+                <button class="secondary-button" type="button" id="musicClearButton">Clear</button>
+              </div>
+            </div>
+
+            <ol class="music-queue-list" id="musicQueueList" aria-label="Upcoming music queue"></ol>
+          </div>
+        </section>
+      </section>
+
+      <aside class="note-panel" aria-label="Goal notes">
+        <button
+          class="note-panel-toggle"
+          type="button"
+          id="toggleNotePanelButton"
+          aria-label="Minimize goals"
+          aria-expanded="true"
+        >
+          →
+        </button>
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Today</p>
+            <h2>Goals / Notes</h2>
+          </div>
+          <span class="storage-pill" id="storageAreaLabel">Storage</span>
+        </div>
+
+        <form class="note-form" id="noteForm">
+          <label class="note-label" for="noteNameInput">Name</label>
+          <input
+            id="noteNameInput"
+            class="note-input note-title-input"
+            maxlength="90"
+            placeholder="Ship project brief"
+            autocomplete="off"
+            required
+          />
+
+          <label class="note-label" for="noteDetailsInput">Details</label>
+          <textarea
+            id="noteDetailsInput"
+            class="note-input note-details-input"
+            maxlength="600"
+            placeholder="Add the next step, context, or reminder."
+            spellcheck="true"
+          ></textarea>
+
+          <div class="panel-actions">
+            <p class="save-status" id="saveStatus" role="status" aria-live="polite">Ready</p>
+            <button class="primary-button" type="submit">Create note</button>
+          </div>
+        </form>
+
+        <ul class="note-list" id="noteList" aria-label="Created notes"></ul>
+      </aside>
+    </main>
+
+    <button
+      class="note-panel-restore"
+      type="button"
+      id="restoreNotePanelButton"
+      aria-label="Open goals"
+      aria-expanded="false"
+    >
+      ←
+    </button>
+
+    <dialog class="settings-dialog" id="settingsDialog" aria-labelledby="settingsTitle">
+      <form class="settings-form" id="settingsForm" method="dialog">
+        <div class="settings-header">
+          <div>
+            <p class="eyebrow">Personalize</p>
+            <h2 id="settingsTitle">Settings</h2>
+          </div>
+          <button class="icon-button" type="button" id="closeSettingsButton" aria-label="Close settings">
+            ×
+          </button>
+        </div>
+
+        <label class="settings-label" for="displayNameInput">Name</label>
+        <input
+          id="displayNameInput"
+          class="settings-input"
+          maxlength="40"
+          placeholder="Payton"
+          autocomplete="name"
+        />
+
+        <label class="settings-label" for="timeFormatInput">Time format</label>
+        <select id="timeFormatInput" class="settings-input">
+          <option value="12">12-hour</option>
+          <option value="24">24-hour</option>
+        </select>
+
+        <label class="settings-label" for="colorModeInput">Default mode</label>
+        <select id="colorModeInput" class="settings-input">
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+
+        <label class="settings-label" for="spotifyClientIdInput">Spotify Client ID</label>
+        <input
+          id="spotifyClientIdInput"
+          class="settings-input"
+          placeholder="Public app client ID"
+          autocomplete="off"
+        />
+        <div class="spotify-settings-actions">
+          <button class="secondary-button" type="button" id="spotifyConnectButton">Connect Spotify</button>
+          <button class="secondary-button" type="button" id="spotifyDisconnectButton">Disconnect</button>
+        </div>
+        <p class="provider-auth-status" id="spotifyAuthStatus">Spotify is not connected.</p>
+
+        <label class="settings-label" for="autoplayLibraryInput">Autoplay songs / artists</label>
+        <textarea
+          id="autoplayLibraryInput"
+          class="settings-input settings-textarea"
+          placeholder="Espresso - Sabrina Carpenter&#10;Cruel Summer - Taylor Swift&#10;Good Luck, Babe! - Chappell Roan"
+          spellcheck="false"
+        ></textarea>
+
+        <fieldset class="theme-fieldset">
+          <legend>Color</legend>
+          <div class="theme-options" id="themeOptions"></div>
+        </fieldset>
+
+        <div class="settings-actions">
+          <p class="save-status" id="settingsStatus" role="status" aria-live="polite">Ready</p>
+          <button class="primary-button" type="submit">Save settings</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="./src/newtab.js"></script>
+  </body>
+</html>

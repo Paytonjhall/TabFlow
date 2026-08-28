@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "TabFlow",
+  "description": "Personalize your new tab with goals, notes, links, and focused tools.",
+  "version": "0.1.0",
+  "permissions": ["storage", "offscreen", "identity"],
+  "host_permissions": [
+    "https://itunes.apple.com/*",
+    "https://audio-ssl.itunes.apple.com/*",
+    "https://accounts.spotify.com/*",
+    "https://api.spotify.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  }
+}

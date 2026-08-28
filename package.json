@@ -1,0 +1,10 @@
+{
+  "name": "tabflow",
+  "version": "0.1.0",
+  "description": "A Chrome new tab extension for personal goals, notes, and tab customization.",
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/config/environment.js && node --check src/storage/chromeStorageAdapter.js && node --check src/storage/storageRouter.js && node --check src/features/notes/noteRepository.js && node --check src/features/quickLinks/quickLinkRepository.js && node --check src/features/settings/settingsRepository.js && node --check src/features/music/providers/itunesPreviewProvider.js && node --check src/features/music/providers/spotifyAuthStorage.js && node --check src/features/music/providers/spotifyProvider.js && node --check src/features/music/musicProviders.js && node --check src/background.js && node --check src/offscreen/audioPlayer.js && node --check src/newtab.js"
+  },
+  "private": true
+}
