@@ -7,19 +7,23 @@
     <link rel="stylesheet" href="./src/styles/newtab.css" />
   </head>
   <body>
-    <button class="theme-mode-button" type="button" id="themeModeButton" aria-label="Turn on dark mode">
-      ◐
-    </button>
-    <button class="settings-button" type="button" id="settingsButton" aria-label="Open settings">
-      ⚙
-    </button>
+    <header class="top-dock" aria-label="TabFlow status and controls">
+      <p class="top-brand">
+        <span>TabFlow</span>
+        <time id="currentTime" aria-label="Current time">--:--</time>
+      </p>
+      <div class="top-actions">
+        <button class="theme-mode-button" type="button" id="themeModeButton" aria-label="Turn on dark mode">
+          ◐
+        </button>
+        <button class="settings-button" type="button" id="settingsButton" aria-label="Open settings">
+          ⚙
+        </button>
+      </div>
+    </header>
 
     <main class="page-shell">
       <section class="focus-area" aria-label="TabFlow overview">
-        <p class="eyebrow">
-          <span>TabFlow</span>
-          <time id="currentTime" aria-label="Current time">--:--</time>
-        </p>
         <h1 id="greetingHeading">Good day.</h1>
 
         <form class="search-form" id="searchForm" action="https://www.google.com/search" method="GET">

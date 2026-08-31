@@ -206,9 +206,21 @@ function getFormattedTime(date) {
 
 function updateTimeSurface() {
   const now = new Date();
-  const name = settings.displayName ? `, ${settings.displayName}` : "";
+  const greetingText = `Good ${getGreetingPeriod(now)}`;
 
-  greetingHeading.textContent = `Good ${getGreetingPeriod(now)}${name}.`;
+  if (settings.displayName) {
+    const name = document.createElement("span");
+    name.className = "greeting-name";
+    name.textContent = settings.displayName;
+    greetingHeading.replaceChildren(
+      document.createTextNode(`${greetingText}, `),
+      name,
+      document.createTextNode(".")
+    );
+  } else {
+    greetingHeading.textContent = `${greetingText}.`;
+  }
+
   currentTime.textContent = getFormattedTime(now);
 }
 
@@ -411,6 +423,14 @@ function renderNotes() {
   }
 }
 
+function getQuickLinkHost(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return String(url).replace(/^[a-z][a-z\d+\-.]*:\/\//i, "").split("/")[0] || "saved link";
+  }
+}
+
 function renderQuickLinks() {
   quickLinkList.replaceChildren();
 
@@ -439,6 +459,10 @@ function renderQuickLinks() {
     label.className = "quick-link-name";
     label.textContent = link.name;
 
+    const hint = document.createElement("span");
+    hint.className = "quick-link-hint";
+    hint.textContent = getQuickLinkHost(link.url);
+
     const deleteButton = document.createElement("button");
     deleteButton.className = "quick-link-delete";
     deleteButton.type = "button";
@@ -446,7 +470,7 @@ function renderQuickLinks() {
     deleteButton.title = `Delete ${link.name}`;
     deleteButton.setAttribute("aria-label", `Delete ${link.name}`);
 
-    anchor.append(icon, label);
+    anchor.append(icon, label, hint);
     item.append(anchor, deleteButton);
     quickLinkList.append(item);
   }
@@ -968,6 +992,23 @@ function handleVolumeInput() {
     });
 }
 
+function updateInteractiveRipple(event) {
+  if (!(event.target instanceof Element)) {
+    return;
+  }
+
+  const target = event.target.closest(".quick-link-anchor");
+
+  if (!target) {
+    return;
+  }
+
+  const bounds = target.getBoundingClientRect();
+  target.style.setProperty("--ripple-x", `${event.clientX - bounds.left}px`);
+  target.style.setProperty("--ripple-y", `${event.clientY - bounds.top}px`);
+}
+
+document.addEventListener("pointermove", updateInteractiveRipple);
 noteForm.addEventListener("submit", createNote);
 noteList.addEventListener("click", handleNoteAction);
 quickLinkForm.addEventListener("submit", createQuickLink);
